@@ -1,21 +1,24 @@
 class ParticlesController<Elem extends HTMLElement> {
-  private intervalId: any;
-  private initialOverflow: string;
+  private initialOverflow!: string | null;
+  private intervalId!: any | null;
+  private callback!: (() => void) | null;
 
-  public readonly density: Density;
-  public readonly attachedElement: Elem;
-  public readonly transitionDuration: number;
-  public readonly particleSize: number;
+  public density: Density | null;
+  public attachedElement: Elem | null;
+  public transitionDuration: number | null;
+  public particleSize: number | null;
+  public active: boolean | null;
 
   constructor({
     parentElement: element,
-    type: type,
+    type,
     fallDuration: duration,
     density,
     size,
     hideParentOverflow: overflow,
+    active,
   }: ControllerSetup<Elem>) {
-    if (!(element && type && duration && density && size))
+    if (!(element && type && duration && density && size && active && overflow))
       throw Error("Constructor error");
 
     this.attachedElement = element!;
@@ -24,46 +27,50 @@ class ParticlesController<Elem extends HTMLElement> {
     this.particleSize = size!;
     this.initialOverflow = getComputedStyle(this.attachedElement).overflow;
 
+    this.active = active;
+    if (!active) this.disable();
+    else this.setInterval();
+
     this.attachedElement.dataset.type = type!;
 
     if (overflow) this.attachedElement.style.overflow = "hidden";
   }
 
   get type(): ParticlesType {
-    return <ParticlesType>this.attachedElement.dataset.type;
+    return <ParticlesType>this.attachedElement!.dataset.type;
   }
 
   set type(type: ParticlesType) {
     console.assert(type !== null && type !== this.type);
 
-    this.attachedElement.dataset.type = type;
+    this.attachedElement!.dataset.type = type;
   }
 
-  get width(): number {
-    return this.attachedElement.clientWidth;
+  private get width(): number {
+    return this.attachedElement!.clientWidth;
   }
 
-  get height(): number {
-    return this.attachedElement.clientHeight;
+  private get height(): number {
+    return this.attachedElement!.clientHeight;
   }
 
-  get startY(): number {
-    return -this.particleSize;
+  private get startY(): number {
+    return -this.particleSize!;
   }
 
-  get endY(): number {
-    return this.height + this.particleSize;
+  private get endY(): number {
+    return this.height + this.particleSize!;
   }
 
-  get startX(): number {
+  private get startX(): number {
     return +(Math.random() * this.width);
   }
 
-  get endX(): number {
+  private get endX(): number {
     return this.startX;
   }
 
-  setInterval(callBack: () => void): void {
+  private setInterval(): void {
     let interval: number;
     switch (this.density) {
       case "low":
@@ -82,43 +89,9 @@ class ParticlesController<Elem extends HTMLElement> {
         interval = 200;
     }
 
-    this.intervalId = setInterval(callBack, interval);
-  }
+    const factory = () => {
+      if (!this.active) return;
 
-  disable(force = false): Elem {
-    clearInterval(this.intervalId);
-    this.intervalId = null;
-
-    this.attachedElement.style.overflow = this.initialOverflow;
-
-    if (force)
-      document.querySelectorAll(".particle").forEach((el) => {
-        el.remove();
-      });
-
-    return this.attachedElement;
-  }
-}
-
-export function addParticles<Elem extends HTMLElement>({
-  parentElement: element,
-  type: type = "rain",
-  fallDuration: duration = 3000,
-  density = "normal",
-  size = 5,
-  hideParentOverflow = false,
-}: ControllerSetup<Elem>): ParticlesController<Elem> {
-  const elem = new ParticlesController<Elem>({
-    parentElement: element,
-    fallDuration: duration,
-    type: type,
-    density,
-    size,
-    hideParentOverflow,
-  });
-
-  elem.setInterval(
-    function (this: ParticlesController<Elem>) {
       const particle = document.createElement("div");
       const x = this.startX;
 
@@ -132,43 +105,87 @@ export function addParticles<Elem extends HTMLElement>({
         transition: all ${this.transitionDuration}ms linear;
       `;
 
-      this.attachedElement.append(particle);
+      this.attachedElement!.append(particle);
 
       particle.style.top = this.endY + "px";
       particle.style.left = x + "px";
-    }.bind(elem)
-  );
+    };
+    this.intervalId = setInterval(factory, interval);
+    this.callback = factory;
+  }
 
-  return elem;
+  public disable(force = false): Elem {
+    if (!this.active) return this.attachedElement!;
+
+    this.active = false;
+    clearInterval(this.intervalId);
+    this.intervalId = null;
+
+    this.attachedElement!.style.overflow = this.initialOverflow!;
+
+    if (force)
+      document.querySelectorAll(".particle").forEach((el) => {
+        el.remove();
+      });
+
+    return this.attachedElement!;
+  }
+
+  public enable(): Elem {
+    if (this.active) this.attachedElement;
+
+    this.active = true;
+    this.setInterval();
+
+    return this.attachedElement!;
+  }
+
+  public destroy(): Elem {
+    const elem = this.attachedElement!;
+    this.attachedElement!.dataset.type = "";
+
+    this.disable(true);
+    this.callback = null;
+    this.attachedElement = null;
+    this.particleSize = null;
+    this.initialOverflow = null;
+    this.transitionDuration = null;
+    this.active = false;
+    this.density = null;
+
+    return elem;
+  }
 }
 
-// ==================================================
-
-const elem = addParticles({
-  parentElement: document.querySelector<HTMLDivElement>(".test")!,
-  density: "storm",
-  type: "snow",
-  hideParentOverflow: true,
-});
-
-// setTimeout(() => {
-//   elem.type = "rain";
-
-//   setTimeout(() => {
-//     elem.disable();
-//   }, 2000);
-// }, 2000);
-
-// ==================================================
+export default function addParticles<Elem extends HTMLElement>({
+  parentElement: element,
+  type: type = "rain",
+  fallDuration: duration = 3000,
+  density = "normal",
+  size = 5,
+  hideParentOverflow = false,
+  active = true,
+}: ControllerSetup<Elem>): ParticlesController<Elem> {
+  return new ParticlesController<Elem>({
+    parentElement: element,
+    fallDuration: duration,
+    type: type,
+    density,
+    size,
+    hideParentOverflow,
+    active,
+  });
+}
 
 type ParticlesType = "rain" | "snow";
 type Density = "low" | "normal" | "dense" | "storm";
 
-export interface ControllerSetup<Elem extends HTMLElement> {
+interface ControllerSetup<Elem extends HTMLElement> {
   parentElement: Elem;
   type?: ParticlesType;
   fallDuration?: number;
   density?: Density;
   size?: number;
   hideParentOverflow?: boolean;
+  active?: boolean;
 }

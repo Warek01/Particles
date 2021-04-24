@@ -1,13 +1,18 @@
 var ParticlesController = (function () {
     function ParticlesController(_a) {
-        var element = _a.parentElement, type = _a.type, duration = _a.fallDuration, density = _a.density, size = _a.size, overflow = _a.hideParentOverflow;
-        if (!(element && type && duration && density && size))
+        var element = _a.parentElement, type = _a.type, duration = _a.fallDuration, density = _a.density, size = _a.size, overflow = _a.hideParentOverflow, active = _a.active;
+        if (!(element && type && duration && density && size && active && overflow))
             throw Error("Constructor error");
         this.attachedElement = element;
         this.transitionDuration = duration;
         this.density = density;
         this.particleSize = size;
         this.initialOverflow = getComputedStyle(this.attachedElement).overflow;
+        this.active = active;
+        if (!active)
+            this.disable();
+        else
+            this.setInterval();
         this.attachedElement.dataset.type = type;
         if (overflow)
             this.attachedElement.style.overflow = "hidden";
@@ -65,7 +70,8 @@ var ParticlesController = (function () {
         enumerable: false,
         configurable: true
     });
-    ParticlesController.prototype.setInterval = function (callBack) {
+    ParticlesController.prototype.setInterval = function () {
+        var _this = this;
         var interval;
         switch (this.density) {
             case "low":
@@ -83,10 +89,26 @@ var ParticlesController = (function () {
             default:
                 interval = 200;
         }
-        this.intervalId = setInterval(callBack, interval);
+        var factory = function () {
+            if (!_this.active)
+                return;
+            var particle = document.createElement("div");
+            var x = _this.startX;
+            particle.ontransitionend = function () { return particle.remove(); };
+            particle.classList.add("particle", _this.type);
+            particle.style.cssText = "\n        width: " + _this.particleSize + "px;\n        height: " + _this.particleSize + "px;\n        top: " + _this.startY + "px;\n        left: " + x + "px;\n        transition: all " + _this.transitionDuration + "ms linear;\n      ";
+            _this.attachedElement.append(particle);
+            particle.style.top = _this.endY + "px";
+            particle.style.left = x + "px";
+        };
+        this.intervalId = setInterval(factory, interval);
+        this.callback = factory;
     };
     ParticlesController.prototype.disable = function (force) {
         if (force === void 0) { force = false; }
+        if (!this.active)
+            return this.attachedElement;
+        this.active = false;
         clearInterval(this.intervalId);
         this.intervalId = null;
         this.attachedElement.style.overflow = this.initialOverflow;
@@ -96,33 +118,37 @@ var ParticlesController = (function () {
             });
         return this.attachedElement;
     };
+    ParticlesController.prototype.enable = function () {
+        if (this.active)
+            this.attachedElement;
+        this.active = true;
+        this.setInterval();
+        return this.attachedElement;
+    };
+    ParticlesController.prototype.destroy = function () {
+        var elem = this.attachedElement;
+        this.attachedElement.dataset.type = "";
+        this.disable(true);
+        this.callback = null;
+        this.attachedElement = null;
+        this.particleSize = null;
+        this.initialOverflow = null;
+        this.transitionDuration = null;
+        this.active = false;
+        this.density = null;
+        return elem;
+    };
     return ParticlesController;
 }());
-export function addParticles(_a) {
-    var element = _a.parentElement, _b = _a.type, type = _b === void 0 ? "rain" : _b, _c = _a.fallDuration, duration = _c === void 0 ? 3000 : _c, _d = _a.density, density = _d === void 0 ? "normal" : _d, _e = _a.size, size = _e === void 0 ? 5 : _e, _f = _a.hideParentOverflow, hideParentOverflow = _f === void 0 ? false : _f;
-    var elem = new ParticlesController({
+export default function addParticles(_a) {
+    var element = _a.parentElement, _b = _a.type, type = _b === void 0 ? "rain" : _b, _c = _a.fallDuration, duration = _c === void 0 ? 3000 : _c, _d = _a.density, density = _d === void 0 ? "normal" : _d, _e = _a.size, size = _e === void 0 ? 5 : _e, _f = _a.hideParentOverflow, hideParentOverflow = _f === void 0 ? false : _f, _g = _a.active, active = _g === void 0 ? true : _g;
+    return new ParticlesController({
         parentElement: element,
         fallDuration: duration,
         type: type,
         density: density,
         size: size,
         hideParentOverflow: hideParentOverflow,
+        active: active,
     });
-    elem.setInterval(function () {
-        var particle = document.createElement("div");
-        var x = this.startX;
-        particle.ontransitionend = function () { return particle.remove(); };
-        particle.classList.add("particle", this.type);
-        particle.style.cssText = "\n        width: " + this.particleSize + "px;\n        height: " + this.particleSize + "px;\n        top: " + this.startY + "px;\n        left: " + x + "px;\n        transition: all " + this.transitionDuration + "ms linear;\n      ";
-        this.attachedElement.append(particle);
-        particle.style.top = this.endY + "px";
-        particle.style.left = x + "px";
-    }.bind(elem));
-    return elem;
 }
-var elem = addParticles({
-    parentElement: document.querySelector(".test"),
-    density: "storm",
-    type: "snow",
-    hideParentOverflow: true,
-});
