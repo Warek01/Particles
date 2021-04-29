@@ -1,8 +1,6 @@
 .particle {
   position: absolute;
   display: block;
-  width: 10px;
-  height: 10px;
   z-index: -1;
 
   &.rain {

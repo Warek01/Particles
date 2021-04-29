@@ -6,8 +6,9 @@ declare class ParticlesController<Elem extends HTMLElement> {
     attachedElement: Elem | null;
     transitionDuration: number | null;
     particleSize: number | null;
+    angle: number;
     active: boolean | null;
-    constructor({ parentElement: element, type, fallDuration: duration, density, size, hideParentOverflow: overflow, active, }: ControllerSetup<Elem>);
+    constructor({ element, type, fallDuration: duration, density, size, hideParentOverflow: overflow, active, angle, }: ControllerSetup<Elem>);
     get type(): ParticlesType;
     set type(type: ParticlesType);
     private get width();
@@ -21,16 +22,17 @@ declare class ParticlesController<Elem extends HTMLElement> {
     enable(): Elem;
     destroy(): Elem;
 }
-export default function addParticles<Elem extends HTMLElement>({ parentElement: element, type: type, fallDuration: duration, density, size, hideParentOverflow, active, }: ControllerSetup<Elem>): ParticlesController<Elem>;
+export default function addParticles<Elem extends HTMLElement>({ element, type, fallDuration: duration, density, size, hideParentOverflow, active, angle, }: ControllerSetup<Elem>): ParticlesController<Elem>;
 declare type ParticlesType = "rain" | "snow";
 declare type Density = "low" | "normal" | "dense" | "storm";
 interface ControllerSetup<Elem extends HTMLElement> {
-    parentElement: Elem;
+    element: Elem;
     type?: ParticlesType;
     fallDuration?: number;
     density?: Density;
     size?: number;
     hideParentOverflow?: boolean;
     active?: boolean;
+    angle?: number;
 }
 export {};
