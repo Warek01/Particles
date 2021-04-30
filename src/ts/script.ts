@@ -1,16 +1,18 @@
 let styleIsAdded: boolean = false;
+const knownTypes: ParticlesType[] = ["rain", "snow"];
+const knownDensities: Density[] = ["low", "normal", "storm", "dense"];
 
 class ParticlesController<Elem extends HTMLElement> {
-  private initialOverflow!: string | null;
-  private intervalId!: any | null;
-  private callback!: (() => void) | null;
+  private initialOverflow!: string;
+  private intervalId!: any;
 
-  public density: Density | null;
-  public attachedElement: Elem | null;
-  public transitionDuration: number | null;
-  public particleSize: number | null;
+  public density: Density;
+  public attachedElement: Elem;
+  public transitionDuration: number;
+  public particleSize: number;
   public angle: number;
-  public active: boolean | null;
+  public active: boolean;
+  public type: ParticlesType;
 
   constructor({
     element,
@@ -24,12 +26,68 @@ class ParticlesController<Elem extends HTMLElement> {
   }: ControllerSetup<Elem>) {
     this.attachedElement = element!;
     this.transitionDuration = duration!;
-    this.density = density!;
     this.particleSize = size!;
     this.initialOverflow = getComputedStyle(this.attachedElement).overflow;
     this.angle = angle!;
 
-    this.active = active!;
+    let _density = density!,
+      _active = active!,
+      _type = type!;
+    Object.defineProperties(this, {
+      density: {
+        enumerable: true,
+        configurable: false,
+
+        get(): Density {
+          return _density;
+        },
+
+        set: (value: Density) => {
+          if (knownDensities.indexOf(value) < 0)
+            throw `Unknown density: ${value}`;
+            
+          _density = value;
+          if (this.active) this.setInterval();
+        },
+      },
+
+      active: {
+        enumerable: true,
+        configurable: false,
+
+        get(): boolean {
+          return _active;
+        },
+
+        set: (value: boolean) => {
+          if (value && !_active) {
+            this.setInterval();
+          } else if (!value && _active) {
+            clearInterval(this.intervalId);
+            this.intervalId = null;
+          }
+          _active = value;
+        },
+      },
+
+      type: {
+        enumerable: true,
+        configurable: false,
+
+        get(): ParticlesType {
+          return _type;
+        },
+
+        set: (value: ParticlesType) => {
+          if (knownTypes.indexOf(value) < 0)
+            throw Error(`Unkown type: ${value}`);
+
+          this.attachedElement!.dataset.type = value;
+          _type = value;
+        },
+      },
+    });
+
     if (!active) this.disable();
     else this.setInterval();
 
@@ -38,42 +96,9 @@ class ParticlesController<Elem extends HTMLElement> {
     if (overflow) this.attachedElement.style.overflow = "hidden";
   }
 
-  get type(): ParticlesType {
-    return <ParticlesType>this.attachedElement!.dataset.type;
-  }
-
-  set type(type: ParticlesType) {
-    console.assert(type !== null && type !== this.type);
-
-    this.attachedElement!.dataset.type = type;
-  }
-
-  private get width(): number {
-    return this.attachedElement!.clientWidth;
-  }
-
-  private get height(): number {
-    return this.attachedElement!.clientHeight;
-  }
-
-  private get startY(): number {
-    return -this.particleSize!;
-  }
-
-  private get endY(): number {
-    return this.height + this.particleSize!;
-  }
-
-  private get startX(): number {
-    return +(Math.random() * this.width);
-  }
-
-  private get endX(): number {
-    return this.startX;
-  }
-
   private setInterval(): void {
     let interval: number;
+
     switch (this.density) {
       case "low":
         interval = 400;
@@ -92,18 +117,24 @@ class ParticlesController<Elem extends HTMLElement> {
     }
 
     const factory = () => {
-      if (!this.active) return;
-
       const particle = document.createElement("div");
-      const range = this.height * Math.tan(degToRad(this.angle));
+
+      const range =
+        Utils.size(this.attachedElement).height *
+        Math.tan(Utils.degToRad(this.angle));
       const offset = Math.abs(range);
 
-      let startX = Math.ceil(Math.random() * this.width);
-      
+      let startX = Math.ceil(
+        Math.random() * Utils.size(this.attachedElement).width
+      );
+
       if (this.angle > 0 && this.angle < 90) {
-        startX = Math.floor(Math.random() * (this.width - -offset) + -offset);
+        startX = Utils.rand(-offset, Utils.size(this.attachedElement).width);
       } else if (this.angle < 0 && this.angle > -90) {
-        startX = Math.floor(Math.random() * (this.width + offset));
+        startX = startX = Utils.rand(
+          0,
+          Utils.size(this.attachedElement).width + offset
+        );
       }
 
       const endX = this.angle ? range + startX : startX;
@@ -113,18 +144,20 @@ class ParticlesController<Elem extends HTMLElement> {
       particle.style.cssText = `
         width: ${this.particleSize}px;
         height: ${this.particleSize}px;
-        top: ${this.startY}px;
+        top: -${this.particleSize}px;
         left: ${startX}px;
         transition: all ${this.transitionDuration}ms linear;
       `;
 
       this.attachedElement!.append(particle);
 
-      particle.style.top = this.endY + "px";
+      particle.style.top =
+        Utils.size(this.attachedElement).height + this.particleSize + "px";
       particle.style.left = endX + "px";
     };
+
+    if (this.intervalId) clearInterval(this.intervalId);
     this.intervalId = setInterval(factory, interval);
-    this.callback = factory;
   }
 
   public disable(force = false): Elem {
@@ -151,22 +184,6 @@ class ParticlesController<Elem extends HTMLElement> {
     this.setInterval();
 
     return this.attachedElement!;
-  }
-
-  public destroy(): Elem {
-    const elem = this.attachedElement!;
-    this.attachedElement!.dataset.type = "";
-
-    this.disable(true);
-    this.callback = null;
-    this.attachedElement = null;
-    this.particleSize = null;
-    this.initialOverflow = null;
-    this.transitionDuration = null;
-    this.active = false;
-    this.density = null;
-
-    return elem;
   }
 }
 
@@ -205,9 +222,36 @@ export default function addParticles<Elem extends HTMLElement>({
   });
 }
 
-/** Returs given value in radians */
-function degToRad(num: number) {
-  return num * (Math.PI / 180);
+namespace Utils {
+  /** Returs given value in radians */
+  export function degToRad(num: number) {
+    return num * (Math.PI / 180);
+  }
+
+  interface Size {
+    width: number;
+    height: number;
+  }
+  function getElementSize<T extends HTMLElement>(elem: T): Size {
+    return {
+      width: elem.clientWidth,
+      height: elem.clientHeight,
+    };
+  }
+
+  export const size = getElementSize;
+
+  export function randX<T extends HTMLElement>(elem: T, offset = 0): number {
+    return Math.ceil(Math.random() * getElementSize(elem).width) + offset;
+  }
+
+  export function randY<T extends HTMLElement>(elem: T, offset = 0): number {
+    return Math.ceil(Math.random() * getElementSize(elem).height) + offset;
+  }
+
+  export function rand(min: number, max: number): number {
+    return Math.ceil(Math.random() * (max - min) + min);
+  }
 }
 
 type ParticlesType = "rain" | "snow";

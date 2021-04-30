@@ -1,14 +1,62 @@
 var styleIsAdded = false;
+var knownTypes = ["rain", "snow"];
+var knownDensities = ["low", "normal", "storm", "dense"];
 var ParticlesController = (function () {
     function ParticlesController(_a) {
+        var _this = this;
         var element = _a.element, type = _a.type, duration = _a.fallDuration, density = _a.density, size = _a.size, overflow = _a.hideParentOverflow, active = _a.active, angle = _a.angle;
         this.attachedElement = element;
         this.transitionDuration = duration;
-        this.density = density;
         this.particleSize = size;
         this.initialOverflow = getComputedStyle(this.attachedElement).overflow;
         this.angle = angle;
-        this.active = active;
+        var _density = density, _active = active, _type = type;
+        Object.defineProperties(this, {
+            density: {
+                enumerable: true,
+                configurable: false,
+                get: function () {
+                    return _density;
+                },
+                set: function (value) {
+                    if (knownDensities.indexOf(value) < 0)
+                        throw "Unknown density: " + value;
+                    _density = value;
+                    if (_this.active)
+                        _this.setInterval();
+                },
+            },
+            active: {
+                enumerable: true,
+                configurable: false,
+                get: function () {
+                    return _active;
+                },
+                set: function (value) {
+                    if (value && !_active) {
+                        _this.setInterval();
+                    }
+                    else if (!value && _active) {
+                        clearInterval(_this.intervalId);
+                        _this.intervalId = null;
+                    }
+                    _active = value;
+                },
+            },
+            type: {
+                enumerable: true,
+                configurable: false,
+                get: function () {
+                    return _type;
+                },
+                set: function (value) {
+                    if (knownTypes.indexOf(value) < 0)
+                        throw Error("Unkown type: " + value);
+                    _this.attachedElement.dataset.type = value;
+                    _type = value;
+                },
+            },
+        });
         if (!active)
             this.disable();
         else
@@ -17,59 +65,6 @@ var ParticlesController = (function () {
         if (overflow)
             this.attachedElement.style.overflow = "hidden";
     }
-    Object.defineProperty(ParticlesController.prototype, "type", {
-        get: function () {
-            return this.attachedElement.dataset.type;
-        },
-        set: function (type) {
-            console.assert(type !== null && type !== this.type);
-            this.attachedElement.dataset.type = type;
-        },
-        enumerable: false,
-        configurable: true
-    });
-    Object.defineProperty(ParticlesController.prototype, "width", {
-        get: function () {
-            return this.attachedElement.clientWidth;
-        },
-        enumerable: false,
-        configurable: true
-    });
-    Object.defineProperty(ParticlesController.prototype, "height", {
-        get: function () {
-            return this.attachedElement.clientHeight;
-        },
-        enumerable: false,
-        configurable: true
-    });
-    Object.defineProperty(ParticlesController.prototype, "startY", {
-        get: function () {
-            return -this.particleSize;
-        },
-        enumerable: false,
-        configurable: true
-    });
-    Object.defineProperty(ParticlesController.prototype, "endY", {
-        get: function () {
-            return this.height + this.particleSize;
-        },
-        enumerable: false,
-        configurable: true
-    });
-    Object.defineProperty(ParticlesController.prototype, "startX", {
-        get: function () {
-            return +(Math.random() * this.width);
-        },
-        enumerable: false,
-        configurable: true
-    });
-    Object.defineProperty(ParticlesController.prototype, "endX", {
-        get: function () {
-            return this.startX;
-        },
-        enumerable: false,
-        configurable: true
-    });
     ParticlesController.prototype.setInterval = function () {
         var _this = this;
         var interval;
@@ -90,28 +85,29 @@ var ParticlesController = (function () {
                 interval = 200;
         }
         var factory = function () {
-            if (!_this.active)
-                return;
             var particle = document.createElement("div");
-            var range = _this.height * Math.tan(degToRad(_this.angle));
+            var range = Utils.size(_this.attachedElement).height *
+                Math.tan(Utils.degToRad(_this.angle));
             var offset = Math.abs(range);
-            var startX = Math.ceil(Math.random() * _this.width);
+            var startX = Math.ceil(Math.random() * Utils.size(_this.attachedElement).width);
             if (_this.angle > 0 && _this.angle < 90) {
-                startX = Math.floor(Math.random() * (_this.width - -offset) + -offset);
+                startX = Utils.rand(-offset, Utils.size(_this.attachedElement).width);
             }
             else if (_this.angle < 0 && _this.angle > -90) {
-                startX = Math.floor(Math.random() * (_this.width + offset));
+                startX = startX = Utils.rand(0, Utils.size(_this.attachedElement).width + offset);
             }
             var endX = _this.angle ? range + startX : startX;
             particle.ontransitionend = function () { return particle.remove(); };
             particle.classList.add("particle", _this.type);
-            particle.style.cssText = "\n        width: " + _this.particleSize + "px;\n        height: " + _this.particleSize + "px;\n        top: " + _this.startY + "px;\n        left: " + startX + "px;\n        transition: all " + _this.transitionDuration + "ms linear;\n      ";
+            particle.style.cssText = "\n        width: " + _this.particleSize + "px;\n        height: " + _this.particleSize + "px;\n        top: -" + _this.particleSize + "px;\n        left: " + startX + "px;\n        transition: all " + _this.transitionDuration + "ms linear;\n      ";
             _this.attachedElement.append(particle);
-            particle.style.top = _this.endY + "px";
+            particle.style.top =
+                Utils.size(_this.attachedElement).height + _this.particleSize + "px";
             particle.style.left = endX + "px";
         };
+        if (this.intervalId)
+            clearInterval(this.intervalId);
         this.intervalId = setInterval(factory, interval);
-        this.callback = factory;
     };
     ParticlesController.prototype.disable = function (force) {
         if (force === void 0) { force = false; }
@@ -134,19 +130,6 @@ var ParticlesController = (function () {
         this.setInterval();
         return this.attachedElement;
     };
-    ParticlesController.prototype.destroy = function () {
-        var elem = this.attachedElement;
-        this.attachedElement.dataset.type = "";
-        this.disable(true);
-        this.callback = null;
-        this.attachedElement = null;
-        this.particleSize = null;
-        this.initialOverflow = null;
-        this.transitionDuration = null;
-        this.active = false;
-        this.density = null;
-        return elem;
-    };
     return ParticlesController;
 }());
 export default function addParticles(_a) {
@@ -167,6 +150,31 @@ export default function addParticles(_a) {
         angle: angle,
     });
 }
-function degToRad(num) {
-    return num * (Math.PI / 180);
-}
+var Utils;
+(function (Utils) {
+    function degToRad(num) {
+        return num * (Math.PI / 180);
+    }
+    Utils.degToRad = degToRad;
+    function getElementSize(elem) {
+        return {
+            width: elem.clientWidth,
+            height: elem.clientHeight,
+        };
+    }
+    Utils.size = getElementSize;
+    function randX(elem, offset) {
+        if (offset === void 0) { offset = 0; }
+        return Math.ceil(Math.random() * getElementSize(elem).width) + offset;
+    }
+    Utils.randX = randX;
+    function randY(elem, offset) {
+        if (offset === void 0) { offset = 0; }
+        return Math.ceil(Math.random() * getElementSize(elem).height) + offset;
+    }
+    Utils.randY = randY;
+    function rand(min, max) {
+        return Math.ceil(Math.random() * (max - min) + min);
+    }
+    Utils.rand = rand;
+})(Utils || (Utils = {}));

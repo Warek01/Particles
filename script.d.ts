@@ -1,26 +1,17 @@
 declare class ParticlesController<Elem extends HTMLElement> {
     private initialOverflow;
     private intervalId;
-    private callback;
-    density: Density | null;
-    attachedElement: Elem | null;
-    transitionDuration: number | null;
-    particleSize: number | null;
+    density: Density;
+    attachedElement: Elem;
+    transitionDuration: number;
+    particleSize: number;
     angle: number;
-    active: boolean | null;
+    active: boolean;
+    type: ParticlesType;
     constructor({ element, type, fallDuration: duration, density, size, hideParentOverflow: overflow, active, angle, }: ControllerSetup<Elem>);
-    get type(): ParticlesType;
-    set type(type: ParticlesType);
-    private get width();
-    private get height();
-    private get startY();
-    private get endY();
-    private get startX();
-    private get endX();
     private setInterval;
     disable(force?: boolean): Elem;
     enable(): Elem;
-    destroy(): Elem;
 }
 export default function addParticles<Elem extends HTMLElement>({ element, type, fallDuration: duration, density, size, hideParentOverflow, active, angle, }: ControllerSetup<Elem>): ParticlesController<Elem>;
 declare type ParticlesType = "rain" | "snow";
