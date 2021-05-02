@@ -12,6 +12,7 @@ declare class ParticlesController<Elem extends HTMLElement> {
     private setInterval;
     disable(force?: boolean): Elem;
     enable(): Elem;
+    destroy(): Elem;
 }
 export default function addParticles<Elem extends HTMLElement>({ element, type, fallDuration: duration, density, size, hideParentOverflow, active, angle, }: ControllerSetup<Elem>): ParticlesController<Elem>;
 declare type ParticlesType = "rain" | "snow";
