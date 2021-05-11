@@ -5,6 +5,7 @@ const knownDensities: Density[] = ["low", "normal", "storm", "dense"];
 class ParticlesController<Elem extends HTMLElement> {
   private initialOverflow!: string;
   private intervalId!: any;
+  private container: HTMLDivElement;
 
   public density: Density;
   public attachedElement: Elem;
@@ -88,76 +89,79 @@ class ParticlesController<Elem extends HTMLElement> {
       },
     });
 
-    if (!active) this.disable();
-    else this.setInterval();
+    this.container = document.createElement("div");
+    this.container.className = "particle-container";
+    this.container.innerHTML =
+      "<!-- Container element for generated particles -->";
 
     this.attachedElement.dataset._type = type!;
+    this.attachedElement.append(this.container);
+
+    if (!active) this.disable();
+    else this.setInterval();
 
     if (overflow) this.attachedElement.style.overflow = "hidden";
   }
 
   private setInterval(): void {
-    let interval: number;
+    if (this.angle < -89 || this.angle > 89)
+      throw new Error(`Angle ${this.angle} not supported`);
+
+    let interval = 50;
 
     switch (this.density) {
       case "low":
-        interval = 400;
+        interval = 100;
         break;
       case "normal":
-        interval = 200;
         break;
       case "dense":
-        interval = 120;
+        interval = 30;
         break;
       case "storm":
-        interval = 20;
+        interval = 5;
         break;
-      default:
-        interval = 200;
     }
 
-    const factory = () => {
-      const particle = document.createElement("div");
+    const node = document.createElement("div");
+    node.classList.add("particle", this.type);
 
-      const range =
-        Utils.size(this.attachedElement).height *
-        Math.tan(Utils.degToRad(this.angle));
-      const offset = Math.abs(range);
+    const trimmed = Utils.trimDegrees(this.angle);
+    const alpha = Utils.degToRad(trimmed);
 
-      let startX = Math.ceil(
-        Math.random() * Utils.size(this.attachedElement).width
-      );
+    const generate = () => {
+      const particle = <HTMLDivElement>node.cloneNode(true);
+      this.container.append(particle);
 
-      if (this.angle > 0 && this.angle < 90) {
-        startX = Utils.rand(-offset, Utils.size(this.attachedElement).width);
-      } else if (this.angle < 0 && this.angle > -90) {
-        startX = startX = Utils.rand(
-          0,
-          Utils.size(this.attachedElement).width + offset
-        );
-      }
+      let range = Utils.size(this.container).height * Math.tan(alpha),
+        offset = Math.abs(range),
+        startX = Utils.rand(-offset, Utils.size(this.container).width),
+        endX = range + startX,
+        startY = -this.particleSize,
+        endY = Utils.size(this.container).height + this.particleSize;
 
-      const endX = this.angle ? range + startX : startX;
-
-      particle.ontransitionend = () => particle.remove();
-      particle.classList.add("particle", this.type);
       particle.style.cssText = `
         width: ${this.particleSize}px;
         height: ${this.particleSize}px;
-        top: -${this.particleSize}px;
+        top: ${startY}px;
         left: ${startX}px;
         transition: all ${this.transitionDuration}ms linear;
-      `;
+        `;
 
-      this.attachedElement!.append(particle);
+      setTimeout(() => {
+        particle.style.top = endY + "px";
+        particle.style.left = endX + "px";
+      });
 
-      particle.style.top =
-        Utils.size(this.attachedElement).height + this.particleSize + "px";
-      particle.style.left = endX + "px";
+      particle.ontransitionend = () => this.active && particle.remove();
+
+      setTimeout(() => {
+        if (this.active && particle) particle.remove();
+      }, this.transitionDuration);
     };
 
     if (this.intervalId) clearInterval(this.intervalId);
-    this.intervalId = setInterval(factory, interval);
+    this.intervalId = setInterval(generate, interval);
   }
 
   public disable(force = false): Elem {
@@ -167,12 +171,11 @@ class ParticlesController<Elem extends HTMLElement> {
     clearInterval(this.intervalId);
     this.intervalId = null;
 
-    this.attachedElement!.style.overflow = this.initialOverflow!;
-
-    if (force)
+    if (force) {
       document.querySelectorAll(".particle").forEach((el) => {
         el.remove();
       });
+    }
 
     return this.attachedElement!;
   }
@@ -192,6 +195,19 @@ class ParticlesController<Elem extends HTMLElement> {
 
     return this.attachedElement;
   }
+
+  public pause() {
+    this.disable();
+    
+    this.container
+      .querySelectorAll<HTMLDivElement>(".particle")
+      .forEach((element) => {
+        const { top, left } = getComputedStyle(element);
+
+        element.style.top = top;
+        element.style.left = left;
+      });
+  }
 }
 
 export default function addParticles<Elem extends HTMLElement>({
@@ -210,7 +226,8 @@ export default function addParticles<Elem extends HTMLElement>({
       document.createTextNode(
         `
         /*_GENERATED_BY_SCRIPT_*/
-        .particle { position: absolute; display: block; z-index: -1; }
+        .particle-container { position: relative; display: block; z-index: 0; height: 100%; width: 100%; }
+        .particle { position: absolute; display: block; }
         .particle.rain { background-color: #3498db; }
         .particle.snow { background-color: #dff9fb; }
     `.replace(/\s/giu, "")
@@ -260,6 +277,25 @@ namespace Utils {
 
   export function rand(min: number, max: number): number {
     return Math.ceil(Math.random() * (max - min) + min);
+  }
+
+  export function trimDegrees(alpha: number): number {
+    // true for +, false for -
+    const sign = alpha >= 0;
+    alpha = Math.abs(alpha);
+
+    while (alpha - 360 > 0) alpha -= 360;
+    if (!sign) alpha = 360 - alpha;
+
+    return alpha;
+  }
+
+  export function angleCuadran(alpha: number): number {
+    if (alpha >= 0 && alpha < 90) return 1;
+    else if (alpha >= 90 && alpha < 180) return 2;
+    else if (alpha >= 180 && alpha < 270) return 3;
+    else if (alpha >= 270 && alpha < 360) return 4;
+    else return 0;
   }
 }
 
